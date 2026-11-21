@@ -1,0 +1,1277 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI 셰프 레시피 - 스마트 요리 & 식단 플래너</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Noto Sans KR', sans-serif;
+      background-color: #faf9f6;
+      color: #1f2937;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    @keyframes floatBounce {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-4px); }
+    }
+    .chef-float {
+      animation: floatBounce 3s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- 상단 내비게이션 -->
+  <header class="sticky top-0 z-40 bg-white/95 backdrop-blur border-b border-orange-100 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-3">
+      <!-- 로고 -->
+      <button onclick="switchView('home')" class="flex items-center gap-2.5 text-left group">
+        <span class="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-amber-500 text-white flex items-center justify-center text-xl shadow-sm group-hover:scale-105 transition">🍳</span>
+        <div>
+          <span class="font-extrabold text-lg sm:text-xl tracking-tight text-gray-900">AI 셰프 <span class="text-orange-500">레시피</span></span>
+          <span class="hidden md:block text-[11px] text-gray-400 -mt-1">레시피 공유 · 요리 심폐소생 · AI 식단</span>
+        </div>
+      </button>
+
+      <!-- 우측 액션 메뉴 -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <button onclick="openApiSettingsModal()" title="API 설정" class="p-2 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition text-sm flex items-center gap-1">
+          <span>⚙️</span>
+          <span class="hidden lg:inline text-xs font-medium">API 설정</span>
+        </button>
+
+        <button onclick="handleShareClick()" class="px-3.5 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold text-xs sm:text-sm shadow-sm transition flex items-center gap-1.5">
+          <span>+</span>
+          <span>레시피 공유</span>
+        </button>
+
+        <!-- 비로그인 상태 버튼 -->
+        <button id="btn-auth-open" onclick="openAuthModal('login')" class="px-3.5 py-2 rounded-xl border border-orange-200 text-orange-600 hover:bg-orange-50 font-semibold text-xs sm:text-sm transition">
+          로그인 / 회원가입
+        </button>
+
+        <!-- 로그인 상태 메뉴 -->
+        <div id="user-nav-group" class="hidden items-center gap-2">
+          <button onclick="switchView('mypage')" id="btn-mypage" class="px-3.5 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 hover:bg-amber-100 font-semibold text-xs sm:text-sm transition flex items-center gap-1.5">
+            <span>👤</span>
+            <span id="nav-user-name">마이페이지</span>
+          </button>
+          <button onclick="logoutUser()" class="px-2.5 py-2 rounded-xl text-gray-500 hover:text-gray-800 hover:bg-gray-100 text-xs font-medium transition">
+            로그아웃
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- 메인 뷰: 레시피 탐색 피드 -->
+  <main id="view-home" class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+    <!-- 히어로 배너 & 검색 -->
+    <section class="bg-gradient-to-r from-orange-500 via-amber-500 to-orange-400 rounded-3xl p-6 sm:p-8 text-white shadow-md mb-8 relative overflow-hidden">
+      <div class="relative z-10 max-w-2xl">
+        <span class="inline-block px-3 py-1 rounded-full bg-white/20 backdrop-blur text-xs font-semibold mb-3">✨ AI 셰프 어시스턴트 탑재</span>
+        <h1 class="text-2xl sm:text-3xl font-extrabold leading-snug mb-2">오늘 뭐 해먹지? 실패 없는 집밥 레시피</h1>
+        <p class="text-orange-50 text-sm sm:text-base mb-5">검증된 레시피를 탐색하고 공유하세요. 요리가 망했거나 냉장고 재료만 있을 땐 우측 하단 <strong>AI 셰프</strong>에게 바로 물어보세요!</p>
+
+        <!-- 검색 바 -->
+        <div class="flex flex-col sm:flex-row gap-2.5">
+          <div class="relative flex-1">
+            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400">🔍</span>
+            <input id="search-input" type="text" oninput="renderRecipes()" placeholder="요리 이름, 재료(예: 계란, 김치, 닭가슴살, 새우), 태그 검색..."
+              class="w-full pl-10 pr-4 py-3 rounded-2xl text-gray-900 bg-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-amber-300 shadow-sm" />
+          </div>
+          <select id="sort-select" onchange="renderRecipes()" class="px-4 py-3 rounded-2xl bg-white text-gray-800 text-sm font-medium focus:outline-none shadow-sm cursor-pointer">
+            <option value="popular">🔥 인기순</option>
+            <option value="latest">🆕 최신순</option>
+            <option value="time">⏱️ 조리시간 짧은순</option>
+            <option value="calorie">🥗 칼로리 낮은순</option>
+          </select>
+        </div>
+      </div>
+      <div class="hidden lg:flex absolute right-8 bottom-4 text-8xl opacity-25 select-none">🥘🥗🍜</div>
+    </section>
+
+    <!-- 카테고리 필터 탭 -->
+    <section class="mb-6">
+      <div id="category-tabs" class="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-2">
+        <!-- JS로 렌더링 -->
+      </div>
+    </section>
+
+    <!-- 레시피 통계 및 안내 -->
+    <div class="flex items-center justify-between mb-4">
+      <p class="text-sm text-gray-600">총 <strong id="recipe-count" class="text-orange-600">0</strong>개의 레시피</p>
+      <button onclick="openChatbotWithPreset('mealplan')" class="text-xs sm:text-sm font-semibold text-orange-600 hover:text-orange-700 flex items-center gap-1">
+        <span>📸 사진으로 AI 맞춤 식단 짜기</span>
+        <span>→</span>
+      </button>
+    </div>
+
+    <!-- 레시피 카드 그리드 -->
+    <section id="recipe-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <!-- JS로 렌더링 -->
+    </section>
+
+    <!-- 검색 결과 없음 -->
+    <div id="empty-state" class="hidden text-center py-16 bg-white rounded-3xl border border-gray-100">
+      <div class="text-5xl mb-3">🍽️</div>
+      <h3 class="text-lg font-bold text-gray-800 mb-1">일치하는 레시피가 없습니다</h3>
+      <p class="text-sm text-gray-500 mb-4">다른 검색어나 카테고리를 선택하거나, 나만의 레시피를 첫 번째로 공유해보세요!</p>
+      <button onclick="resetFilters()" class="px-4 py-2 rounded-xl bg-orange-100 text-orange-700 font-semibold text-sm hover:bg-orange-200 transition">전체 레시피 보기</button>
+    </div>
+  </main>
+
+  <!-- 마이페이지 뷰 -->
+  <main id="view-mypage" class="hidden flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="mb-6">
+      <button onclick="switchView('home')" class="text-sm text-gray-500 hover:text-orange-600 font-medium flex items-center gap-1">
+        <span>←</span>
+        <span>전체 레시피 피드로 돌아가기</span>
+      </button>
+    </div>
+
+    <!-- 프로필 카드 -->
+    <section class="bg-white rounded-3xl p-6 sm:p-8 border border-orange-100 shadow-sm mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+      <div class="flex items-center gap-4">
+        <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-400 to-amber-500 text-white flex items-center justify-center text-3xl font-bold shadow-sm" id="mypage-avatar">
+          👨‍🍳
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h2 id="mypage-nickname" class="text-xl sm:text-2xl font-extrabold text-gray-900">사용자</h2>
+            <span class="px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs font-semibold">홈셰프 멤버</span>
+          </div>
+          <p id="mypage-email" class="text-sm text-gray-500 mt-0.5">user@example.com</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-4 w-full sm:w-auto justify-around sm:justify-end bg-orange-50/70 px-6 py-4 rounded-2xl">
+        <div class="text-center">
+          <p class="text-xs text-gray-500 mb-0.5">찜한 레시피</p>
+          <p id="stat-liked-count" class="text-xl font-extrabold text-orange-600">0</p>
+        </div>
+        <div class="h-8 w-px bg-orange-200"></div>
+        <div class="text-center">
+          <p class="text-xs text-gray-500 mb-0.5">내가 올린 레시피</p>
+          <p id="stat-mine-count" class="text-xl font-extrabold text-amber-600">0</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 마이페이지 탭 -->
+    <div class="flex items-center gap-3 border-b border-gray-200 mb-6">
+      <button id="tab-liked" onclick="switchMyPageTab('liked')" class="pb-3 px-2 font-bold text-sm sm:text-base border-b-2 border-orange-500 text-orange-600 transition">
+        ❤️ 내가 찜한 레시피
+      </button>
+      <button id="tab-mine" onclick="switchMyPageTab('mine')" class="pb-3 px-2 font-bold text-sm sm:text-base border-b-2 border-transparent text-gray-500 hover:text-gray-800 transition">
+        👨‍🍳 내가 올린 레시피
+      </button>
+    </div>
+
+    <!-- 마이페이지 레시피 리스트 -->
+    <div id="mypage-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+    <div id="mypage-empty" class="hidden text-center py-16 bg-white rounded-3xl border border-gray-100">
+      <div class="text-4xl mb-3">📭</div>
+      <p id="mypage-empty-text" class="text-gray-600 font-medium mb-4">아직 목록이 비어 있습니다.</p>
+      <button onclick="switchView('home')" class="px-4 py-2 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 transition">레시피 둘러보기</button>
+    </div>
+  </main>
+
+  <!-- 레시피 상세 모달 -->
+  <div id="detail-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl relative">
+      <button onclick="closeDetailModal()" class="sticky top-4 float-right mr-4 mt-4 z-10 w-9 h-9 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black transition">✕</button>
+      <div id="detail-content"></div>
+    </div>
+  </div>
+
+  <!-- 레시피 공유(작성) 모달 -->
+  <div id="share-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 sm:p-8 shadow-2xl">
+      <div class="flex items-center justify-between mb-5">
+        <h2 class="text-xl font-extrabold text-gray-900">🍳 나만의 레시피 공유하기</h2>
+        <button onclick="closeShareModal()" class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600">✕</button>
+      </div>
+
+      <form id="share-form" onsubmit="submitRecipe(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">요리 제목 *</label>
+          <input id="inp-title" type="text" required placeholder="예: 10분 완성 팽이버섯 덮밥" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-orange-500" />
+        </div>
+
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">카테고리</label>
+            <select id="inp-category" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white">
+              <option value="한식">한식</option>
+              <option value="양식">양식</option>
+              <option value="일식/중식">일식/중식</option>
+              <option value="다이어트/건강식">다이어트/건강식</option>
+              <option value="초간단/자취요리">초간단/자취요리</option>
+              <option value="디저트">디저트</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">조리시간(분)</label>
+            <input id="inp-time" type="number" min="1" value="15" required class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">난이도</label>
+            <select id="inp-difficulty" class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white">
+              <option value="초급">초급</option>
+              <option value="중급">중급</option>
+              <option value="고급">고급</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">칼로리(kcal)</label>
+            <input id="inp-calories" type="number" min="10" value="420" required class="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">한 줄 소개 *</label>
+          <input id="inp-desc" type="text" required placeholder="요리의 매력이나 팁을 간단히 적어주세요" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm" />
+        </div>
+
+        <!-- 사진 업로드 또는 URL -->
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">요리 대표 사진 (파일 업로드 또는 이미지 주소)</label>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input id="inp-image-file" type="file" accept="image/*" onchange="handleRecipeImageUpload(event)" class="text-xs text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100" />
+            <input id="inp-image-url" type="text" placeholder="또는 이미지 URL 붙여넣기 (미입력 시 기본 음식 이미지)" class="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-xs" />
+          </div>
+          <img id="preview-recipe-img" class="hidden mt-2 h-32 w-full object-cover rounded-xl border border-gray-200" alt="미리보기" />
+        </div>
+
+        <!-- 재료 동적 추가 -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-xs font-bold text-gray-700">필요한 재료 *</label>
+            <button type="button" onclick="addIngredientRow()" class="text-xs font-semibold text-orange-600 hover:underline">+ 재료 추가</button>
+          </div>
+          <div id="ingredients-list" class="space-y-2"></div>
+        </div>
+
+        <!-- 조리 순서 동적 추가 -->
+        <div>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="text-xs font-bold text-gray-700">조리 순서 *</label>
+            <button type="button" onclick="addStepRow()" class="text-xs font-semibold text-orange-600 hover:underline">+ 단계 추가</button>
+          </div>
+          <div id="steps-list" class="space-y-2"></div>
+        </div>
+
+        <div class="pt-3 flex justify-end gap-2">
+          <button type="button" onclick="closeShareModal()" class="px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600 hover:bg-gray-50">취소</button>
+          <button type="submit" class="px-6 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold shadow-sm">레시피 등록하기</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 로그인 / 회원가입 모달 -->
+  <div id="auth-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl">
+      <div class="flex items-center justify-between mb-5">
+        <h2 id="auth-modal-title" class="text-xl font-extrabold text-gray-900">로그인</h2>
+        <button onclick="closeAuthModal()" class="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-600">✕</button>
+      </div>
+
+      <!-- 탭 전환 -->
+      <div class="grid grid-cols-2 bg-gray-100 p-1 rounded-xl mb-5">
+        <button id="auth-tab-login" onclick="switchAuthTab('login')" class="py-2 rounded-lg text-sm font-bold bg-white text-orange-600 shadow-sm">로그인</button>
+        <button id="auth-tab-signup" onclick="switchAuthTab('signup')" class="py-2 rounded-lg text-sm font-bold text-gray-500">회원가입</button>
+      </div>
+
+      <form id="auth-form" onsubmit="handleAuthSubmit(event)" class="space-y-3.5">
+        <div id="auth-nickname-field" class="hidden">
+          <label class="block text-xs font-bold text-gray-700 mb-1">닉네임 *</label>
+          <input id="auth-nickname" type="text" placeholder="예: 자취요리왕" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">이메일 *</label>
+          <input id="auth-email" type="email" required placeholder="chef@example.com" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm" />
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">비밀번호 *</label>
+          <input id="auth-password" type="password" required minlength="6" placeholder="6자 이상 입력" class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm" />
+        </div>
+
+        <button type="submit" id="auth-submit-btn" class="w-full py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm shadow-sm transition">
+          로그인하기
+        </button>
+      </form>
+
+      <div class="mt-4 pt-4 border-t border-gray-100 text-center">
+        <button onclick="quickDemoLogin()" class="w-full py-2.5 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition">
+          ⚡ 체험용 셰프 계정으로 1초 로그인
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- API 설정 모달 (GitHub Pages 배포용 안전 키 관리) -->
+  <div id="api-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-extrabold text-gray-900">⚙️ AI 셰프 API 설정</h3>
+        <button onclick="closeApiSettingsModal()" class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-600">✕</button>
+      </div>
+      <p class="text-xs text-gray-500 mb-4 leading-relaxed">
+        GitHub Pages 등 공개 웹사이트에 올릴 때 API 키가 코드에 노출되지 않도록 브라우저 로컬 저장소에만 안전하게 저장합니다. 키가 없어도 기본 AI 요리 상담 시뮬레이터가 작동합니다.
+      </p>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-gray-700 mb-1">Gemini API Key (선택 사항)</label>
+          <input id="gemini-key-input" type="password" placeholder="AIzaSy..." class="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 text-sm" />
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button onclick="closeApiSettingsModal()" class="px-4 py-2 rounded-xl border border-gray-200 text-xs font-semibold text-gray-600">닫기</button>
+          <button onclick="saveApiKey()" class="px-4 py-2 rounded-xl bg-orange-500 text-white text-xs font-bold hover:bg-orange-600">저장하기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 플로팅 AI 셰프 챗봇 버튼 -->
+  <button onclick="toggleChatbot()" id="chatbot-fab"
+    class="chef-float fixed bottom-6 right-6 z-40 flex items-center gap-2.5 px-4 py-3.5 rounded-full bg-gradient-to-r from-orange-600 to-amber-500 text-white shadow-xl hover:shadow-2xl hover:scale-105 transition cursor-pointer">
+    <span class="text-2xl">👨‍🍳</span>
+    <span class="font-bold text-sm pr-1">AI 셰프 상담</span>
+  </button>
+
+  <!-- 플로팅 AI 셰프 챗봇 창 -->
+  <div id="chatbot-window" class="hidden fixed bottom-24 right-4 sm:right-6 z-50 w-[calc(100vw-2rem)] sm:w-[400px] h-[560px] max-h-[78vh] bg-white rounded-3xl shadow-2xl border border-orange-100 flex flex-col overflow-hidden">
+    <!-- 챗봇 헤더 -->
+    <div class="bg-gradient-to-r from-orange-500 to-amber-500 p-4 text-white flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl">👨‍🍳</div>
+        <div>
+          <h3 class="font-bold text-sm">AI 셰프 구원투수 & 식단 플래너</h3>
+          <p class="text-[11px] text-orange-100">요리 심폐소생 · 대체 재료 · 사진 식단 분석</p>
+        </div>
+      </div>
+      <button onclick="toggleChatbot()" class="w-8 h-8 rounded-full hover:bg-white/20 flex items-center justify-center text-white">✕</button>
+    </div>
+
+    <!-- 빠른 액션 칩 -->
+    <div class="bg-orange-50/80 px-3 py-2 flex items-center gap-1.5 overflow-x-auto scrollbar-hide border-b border-orange-100">
+      <button onclick="applyChatPrompt('요리가 너무 짜졌는데 심폐소생술 알려줘!')" class="shrink-0 px-2.5 py-1 rounded-full bg-white border border-orange-200 text-[11px] font-semibold text-orange-700 hover:bg-orange-100">🚨 요리 심폐소생술</button>
+      <button onclick="applyChatPrompt('생크림이 없는데 대체할 수 있는 재료 알려줘')" class="shrink-0 px-2.5 py-1 rounded-full bg-white border border-orange-200 text-[11px] font-semibold text-orange-700 hover:bg-orange-100">🔄 대체 재료 찾기</button>
+      <button onclick="triggerChatPhoto()" class="shrink-0 px-2.5 py-1 rounded-full bg-white border border-orange-200 text-[11px] font-semibold text-orange-700 hover:bg-orange-100">📸 냉장고/식단 사진 분석</button>
+    </div>
+
+    <!-- 대화 메시지 영역 -->
+    <div id="chat-messages" class="flex-1 p-4 overflow-y-auto space-y-3 bg-[#fcfbf9] text-sm">
+      <div class="flex items-start gap-2.5">
+        <div class="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center shrink-0">👨‍🍳</div>
+        <div class="bg-white border border-gray-100 rounded-2xl rounded-tl-none p-3 shadow-sm text-gray-800 leading-relaxed text-xs sm:text-sm">
+          안녕하세요! <strong>AI 셰프</strong>입니다. 🍳<br/>
+          • <strong>요리가 망했을 때</strong> (너무 짜거나 탔을 때 복구법)<br/>
+          • <strong>대체 재료</strong>가 궁금할 때<br/>
+          • <strong>냉장고·음식 사진</strong>을 올리고 맞춤 식단을 짤 때<br/>
+          무엇이든 편하게 물어보세요!
+        </div>
+      </div>
+    </div>
+
+    <!-- 첨부 이미지 미리보기 바 -->
+    <div id="chat-image-preview-bar" class="hidden px-3 py-2 bg-amber-50 border-t border-amber-100 flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <img id="chat-preview-thumb" class="w-10 h-10 rounded-lg object-cover border border-amber-200" alt="첨부사진" />
+        <span class="text-xs font-medium text-amber-800">사진이 첨부되었습니다</span>
+      </div>
+      <button onclick="clearChatImage()" class="text-xs text-gray-500 hover:text-red-500 font-bold">삭제</button>
+    </div>
+
+    <!-- 입력창 -->
+    <form onsubmit="sendChatMessage(event)" class="p-3 bg-white border-t border-gray-100 flex items-center gap-2">
+      <input id="chat-file-input" type="file" accept="image/*" class="hidden" onchange="handleChatImageSelect(event)" />
+      <button type="button" onclick="triggerChatPhoto()" title="사진 업로드" class="p-2.5 rounded-xl bg-gray-100 hover:bg-orange-100 text-gray-600 hover:text-orange-600 transition">
+        📷
+      </button>
+      <input id="chat-input" type="text" placeholder="질문이나 식단 요청을 입력하세요..." class="flex-1 px-3.5 py-2.5 rounded-xl bg-gray-100 text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-orange-400" />
+      <button type="submit" class="px-4 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-sm transition">
+        전송
+      </button>
+    </form>
+  </div>
+
+  <!-- 토스트 알림 -->
+  <div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-gray-900/90 text-white px-5 py-2.5 rounded-full text-xs sm:text-sm font-medium shadow-lg"></div>
+
+  <script>
+    // ==================== 초기 샘플 레시피 데이터 (총 10개) ====================
+    const INITIAL_RECIPES = [
+      {
+        id: 'rec-1',
+        title: '10분 완성 마약 계란간장 덮밥',
+        category: '초간단/자취요리',
+        time: 10,
+        difficulty: '초급',
+        calories: 460,
+        likes: 128,
+        author: '자취요리연구소',
+        authorEmail: 'demo@chef.kr',
+        desc: '바쁜 아침이나 자취생 저녁으로 최고! 반숙 계란과 특제 간장 소스의 황금 비율 레시피입니다.',
+        image: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80',
+        tags: ['계란', '간장', '초간단', '자취'],
+        ingredients: ['밥 1공기', '계란 2개', '진간장 2큰술', '굴소스 0.5큰술', '참기름 1큰술', '통깨 약간', '쪽파 약간'],
+        steps: [
+          '팬에 식용유를 넉넉히 두르고 계란 2개를 반숙 프라이로 익혀줍니다.',
+          '진간장 2큰술, 굴소스 0.5큰술, 물 1큰술, 설탕 0.5큰술을 섞어 특제 소스를 만듭니다.',
+          '따뜻한 밥 위에 계란 프라이를 올리고 소스와 참기름, 쪽파, 통깨를 뿌려 완성합니다.'
+        ]
+      },
+      {
+        id: 'rec-2',
+        title: '돼지고기 묵은지 김치찌개',
+        category: '한식',
+        time: 25,
+        difficulty: '초급',
+        calories: 520,
+        likes: 245,
+        author: '집밥백선생팬',
+        authorEmail: 'hansik@chef.kr',
+        desc: '깊고 칼칼한 국물 맛이 일품인 실패 없는 정통 돼지고기 김치찌개입니다.',
+        image: 'https://images.unsplash.com/photo-1498654896293-37aacf113fd9?auto=format&fit=crop&w=800&q=80',
+        tags: ['김치', '돼지고기', '국물', '한식'],
+        ingredients: ['신김치 1/4포기', '돼지고기 앞다리살 200g', '두부 1/2모', '대파 1/2대', '고춧가루 1.5큰술', '다진마늘 1큰술', '쌀뜨물 500ml'],
+        steps: [
+          '냄비에 돼지고기와 썬 신김치를 넣고 참기름 1큰술과 함께 3분간 볶아줍니다.',
+          '쌀뜨물 500ml를 붓고 고춧가루, 다진마늘, 국간장 1큰술을 넣어 15분간 중불에서 끓입니다.',
+          '먹기 좋게 썬 두부와 어슷 썬 대파를 넣고 3분 더 한소끔 끓여 마무리합니다.'
+        ]
+      },
+      {
+        id: 'rec-3',
+        title: '고단백 닭가슴살 아보카도 샐러드 볼',
+        category: '다이어트/건강식',
+        time: 15,
+        difficulty: '초급',
+        calories: 340,
+        likes: 189,
+        author: '헬시그린',
+        authorEmail: 'diet@chef.kr',
+        desc: '포만감은 높이고 칼로리는 낮춘 식단 관리용 밸런스 샐러드입니다.',
+        image: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=800&q=80',
+        tags: ['닭가슴살', '아보카도', '다이어트', '샐러드'],
+        ingredients: ['수비드 닭가슴살 120g', '아보카도 1/2개', '믹스 채소 80g', '방울토마토 5알', '올리브오일 1큰술', '레몬즙 1큰술'],
+        steps: [
+          '닭가슴살은 한입 크기로 썰고, 아보카도와 방울토마토도 먹기 좋게 손질합니다.',
+          '볼에 믹스 채소를 깔고 손질한 재료를 보기 좋게 담습니다.',
+          '올리브오일, 레몬즙, 소금, 후추를 섞은 드레싱을 곁들여 상큼하게 즐깁니다.'
+        ]
+      },
+      {
+        id: 'rec-4',
+        title: '꾸덕한 베이컨 크림 까르보나라',
+        category: '양식',
+        time: 20,
+        difficulty: '중급',
+        calories: 680,
+        likes: 210,
+        author: '파스타장인',
+        authorEmail: 'pasta@chef.kr',
+        desc: '레스토랑 부럽지 않은 진하고 고소한 크림 파스타 레시피입니다.',
+        image: 'https://images.unsplash.com/photo-1612874742237-6526221588e3?auto=format&fit=crop&w=800&q=80',
+        tags: ['파스타', '베이컨', '크림', '양식'],
+        ingredients: ['스파게티면 100g', '베이컨 3줄', '마늘 4쪽', '생크림 200ml', '파마산 치즈가루 2큰술', '후추 약간'],
+        steps: [
+          '끓는 물에 소금 1큰술을 넣고 스파게티면을 7분간 삶아 면수를 한 국자 남겨둡니다.',
+          '팬에 편 썬 마늘과 베이컨을 노릇하게 볶다가 생크림과 면수를 넣고 끓입니다.',
+          '삶은 면과 파마산 치즈를 넣고 농도를 맞춘 뒤 통후추를 넉넉히 갈아 완성합니다.'
+        ]
+      },
+      {
+        id: 'rec-5',
+        title: '불맛 가득 차슈 간장 라멘',
+        category: '일식/중식',
+        time: 30,
+        difficulty: '중급',
+        calories: 610,
+        likes: 164,
+        author: '도쿄키친',
+        authorEmail: 'japan@chef.kr',
+        desc: '집에서도 진한 감칠맛의 일본식 소유 라멘을 간편하게 재현해보세요.',
+        image: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&w=800&q=80',
+        tags: ['라멘', '면요리', '일식', '반숙란'],
+        ingredients: ['생라멘 면 1인분', '대패삼겹살 100g', '반숙 계란 1개', '간장 2큰술', '맛술 1큰술', '치킨스톡 1큰술', '물 450ml'],
+        steps: [
+          '팬에 대패삼겹살을 굽다가 간장, 맛술을 넣어 졸여 즉석 차슈를 만듭니다.',
+          '물 450ml에 치킨스톡, 간장 1큰술, 다진마늘 약간을 넣고 끓여 육수를 냅니다.',
+          '삶은 면을 그릇에 담고 육수를 부은 뒤 차슈, 반숙란, 쪽파를 올려 완성합니다.'
+        ]
+      },
+      {
+        id: 'rec-6',
+        title: '노오븐 딸기 티라미수 컵케이크',
+        category: '디저트',
+        time: 20,
+        difficulty: '초급',
+        calories: 390,
+        likes: 197,
+        author: '스위트홈',
+        authorEmail: 'dessert@chef.kr',
+        desc: '오븐 없이 20분 만에 완성하는 홈카페 비주얼 디저트입니다.',
+        image: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?auto=format&fit=crop&w=800&q=80',
+        tags: ['딸기', '티라미수', '디저트', '노오븐'],
+        ingredients: ['카스텔라 1조각', '마스카포네 치즈 150g', '생크림 100ml', '설탕 2큰술', '딸기 6알', '코코아 파우더 약간'],
+        steps: [
+          '마스카포네 치즈, 생크림, 설탕을 볼에 넣고 부드러운 크림 상태가 되도록 휘핑합니다.',
+          '투명 컵에 카스텔라를 깔고 크림과 슬라이스한 딸기를 층층이 쌓아 올립니다.',
+          '맨 위에 코코아 파우더와 생딸기로 장식한 뒤 냉장고에서 30분 차갑게 굳혀 드세요.'
+        ]
+      },
+      {
+        id: 'rec-7',
+        title: '매콤달콤 기사식당 스타일 제육볶음',
+        category: '한식',
+        time: 20,
+        difficulty: '초급',
+        calories: 590,
+        likes: 276,
+        author: '한식마스터',
+        authorEmail: 'hansik2@chef.kr',
+        desc: '물기 없이 쫀득하고 불향 가득하게 볶아낸 밥도둑 제육볶음 황금 레시피입니다.',
+        image: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&w=800&q=80',
+        tags: ['제육볶음', '돼지고기', '매콤', '밥도둑'],
+        ingredients: ['돼지고기 앞다리살 300g', '양파 1/2개', '대파 1대', '고추장 1.5큰술', '고춧가루 2큰술', '진간장 2큰술', '설탕 1.5큰술', '다진마늘 1큰술'],
+        steps: [
+          '고추장, 고춧가루, 진간장, 설탕, 다진마늘, 후추를 섞어 양념장을 미리 숙성시킵니다.',
+          '달군 팬에 돼지고기를 먼저 볶아 겉면을 익힌 뒤 양념장을 넣고 센 불에서 빠르게 볶습니다.',
+          '채 썬 양파와 대파를 넣고 숨이 살짝 죽을 때까지만 볶아 참기름과 통깨를 뿌려 완성합니다.'
+        ]
+      },
+      {
+        id: 'rec-8',
+        title: '갈릭 버터 새우 오일 파스타',
+        category: '양식',
+        time: 18,
+        difficulty: '초급',
+        calories: 510,
+        likes: 183,
+        author: '올리브키친',
+        authorEmail: 'olive@chef.kr',
+        desc: '탱글탱글한 칵테일 새우와 고소한 마늘 향이 어우러진 감바스 풍 오일 파스타입니다.',
+        image: 'https://images.unsplash.com/photo-1563379926898-05f4575a45d8?auto=format&fit=crop&w=800&q=80',
+        tags: ['새우', '파스타', '마늘', '오일파스타'],
+        ingredients: ['스파게티면 100g', '칵테일 새우 8마리', '통마늘 6쪽', '올리브오일 4큰술', '페페론치노 3개', '버터 1조각', '파슬리 약간'],
+        steps: [
+          '올리브오일을 두른 팬에 편 썬 마늘과 부순 페페론치노를 넣고 약불에서 향을 냅니다.',
+          '해동한 새우를 넣고 붉게 익을 때까지 볶다가 삶은 면과 면수 반 국자를 부어줍니다.',
+          '마지막에 버터 1조각을 넣어 유화시킨 뒤 소금으로 간을 맞추고 파슬리를 뿌려 마무리합니다.'
+        ]
+      },
+      {
+        id: 'rec-9',
+        title: '고소한 두부면 참깨 비빔국수',
+        category: '다이어트/건강식',
+        time: 10,
+        difficulty: '초급',
+        calories: 295,
+        likes: 221,
+        author: '라이트밀',
+        authorEmail: 'light@chef.kr',
+        desc: '밀가루 면 대신 두부면을 사용해 탄수화물 걱정 없이 든든하게 즐기는 저칼로리 별미입니다.',
+        image: 'https://images.unsplash.com/photo-1552611052-33e04de081de?auto=format&fit=crop&w=800&q=80',
+        tags: ['두부면', '다이어트', '저칼로리', '비빔국수'],
+        ingredients: ['두부면 1팩(100g)', '오이 1/3개', '삶은 계란 1/2개', '참깨 드레싱 2큰술', '진간장 1큰술', '알룰로스 1큰술', '식초 1큰술'],
+        steps: [
+          '두부면은 체에 밭쳐 찬물에 가볍게 헹군 뒤 물기를 꼭 짜줍니다.',
+          '참깨 드레싱, 진간장, 알룰로스, 식초, 다진마늘 약간을 섞어 고소한 소스를 만듭니다.',
+          '그릇에 두부면과 채 썬 오이를 담고 소스를 부은 뒤 삶은 계란을 올려 완성합니다.'
+        ]
+      },
+      {
+        id: 'rec-10',
+        title: '바삭 촉촉 중화풍 계란 토마토 볶음 (토달볶)',
+        category: '일식/중식',
+        time: 12,
+        difficulty: '초급',
+        calories: 320,
+        likes: 204,
+        author: '웍마스터',
+        authorEmail: 'wok@chef.kr',
+        desc: '부드러운 스크램블 에그와 달콤새콤한 토마토가 만나 밥 위에 얹어 먹기 딱 좋은 집밥 메뉴입니다.',
+        image: 'https://images.unsplash.com/photo-1525351484163-7529414342d8?auto=format&fit=crop&w=800&q=80',
+        tags: ['토마토', '계란', '초간단', '토달볶'],
+        ingredients: ['완숙 토마토 2개', '계란 3개', '대파 1/2대', '굴소스 1큰술', '케첩 1큰술', '설탕 0.5큰술', '소금 한 꼬집'],
+        steps: [
+          '계란 3개에 소금 한 꼬집을 넣고 푼 뒤, 기름 두른 팬에서 몽글몽글하게 스크램블해 덜어둡니다.',
+          '같은 팬에 송송 썬 대파로 파기름을 내고 한입 크기로 썬 토마토를 넣어 볶습니다.',
+          '굴소스, 케첩, 설탕을 넣고 토마토가 살짝 뭉개지면 덜어둔 계란을 합쳐 가볍게 섞어 완성합니다.'
+        ]
+      }
+    ];
+
+    const CATEGORIES = ['전체', '한식', '양식', '일식/중식', '다이어트/건강식', '초간단/자취요리', '디저트'];
+    const STORAGE_KEY_RECIPES = 'ai_chef_recipes_v2';
+
+    // ==================== 상태 관리 ====================
+    let recipes = JSON.parse(localStorage.getItem(STORAGE_KEY_RECIPES)) || INITIAL_RECIPES;
+    let currentUser = JSON.parse(localStorage.getItem('ai_chef_user')) || null;
+    let likedIds = JSON.parse(localStorage.getItem('ai_chef_likes')) || [];
+    let selectedCategory = '전체';
+    let currentMyPageTab = 'liked';
+    let authMode = 'login';
+    let uploadedRecipeImageBase64 = '';
+    let chatAttachedImageBase64 = '';
+
+    // ==================== 초기화 ====================
+    document.addEventListener('DOMContentLoaded', () => {
+      renderCategories();
+      renderRecipes();
+      updateAuthUI();
+      initShareFormRows();
+    });
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.remove('hidden');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => toast.classList.add('hidden'), 2600);
+    }
+
+    // ==================== 카테고리 & 메인 레시피 피드 ====================
+    function renderCategories() {
+      const container = document.getElementById('category-tabs');
+      container.innerHTML = CATEGORIES.map(cat => {
+        const active = selectedCategory === cat;
+        return `
+          <button onclick="selectCategory('${cat}')"
+            class="shrink-0 px-4 py-2 rounded-full text-xs sm:text-sm font-bold transition ${
+              active
+                ? 'bg-orange-500 text-white shadow-sm'
+                : 'bg-white text-gray-600 border border-gray-200 hover:border-orange-300 hover:text-orange-600'
+            }">
+            ${cat}
+          </button>
+        `;
+      }).join('');
+    }
+
+    function selectCategory(cat) {
+      selectedCategory = cat;
+      renderCategories();
+      renderRecipes();
+    }
+
+    function resetFilters() {
+      selectedCategory = '전체';
+      document.getElementById('search-input').value = '';
+      document.getElementById('sort-select').value = 'popular';
+      renderCategories();
+      renderRecipes();
+    }
+
+    function getFilteredRecipes() {
+      const query = document.getElementById('search-input').value.trim().toLowerCase();
+      const sortBy = document.getElementById('sort-select').value;
+
+      let filtered = recipes.filter(r => {
+        const matchCat = selectedCategory === '전체' || r.category === selectedCategory;
+        const matchQuery = !query ||
+          r.title.toLowerCase().includes(query) ||
+          r.desc.toLowerCase().includes(query) ||
+          r.ingredients.some(i => i.toLowerCase().includes(query)) ||
+          (r.tags && r.tags.some(t => t.toLowerCase().includes(query)));
+        return matchCat && matchQuery;
+      });
+
+      if (sortBy === 'popular') filtered.sort((a, b) => b.likes - a.likes);
+      else if (sortBy === 'time') filtered.sort((a, b) => a.time - b.time);
+      else if (sortBy === 'calorie') filtered.sort((a, b) => a.calories - b.calories);
+
+      return filtered;
+    }
+
+    function renderRecipes() {
+      const list = getFilteredRecipes();
+      const grid = document.getElementById('recipe-grid');
+      const empty = document.getElementById('empty-state');
+      document.getElementById('recipe-count').textContent = list.length;
+
+      if (list.length === 0) {
+        grid.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+      }
+      empty.classList.add('hidden');
+      grid.innerHTML = list.map(r => createRecipeCardHTML(r, false)).join('');
+    }
+
+    function createRecipeCardHTML(r, allowDelete) {
+      const isLiked = likedIds.includes(r.id);
+      return `
+        <article class="bg-white rounded-3xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition flex flex-col group">
+          <div class="relative h-48 overflow-hidden cursor-pointer" onclick="openDetailModal('${r.id}')">
+            <img src="${r.image}" alt="${r.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+            <span class="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/60 backdrop-blur text-white text-xs font-semibold">
+              ${r.category}
+            </span>
+            <button onclick="event.stopPropagation(); toggleLike('${r.id}')"
+              class="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/90 hover:bg-white flex items-center justify-center shadow-sm transition text-base">
+              ${isLiked ? '❤️' : '🤍'}
+            </button>
+          </div>
+          <div class="p-5 flex-1 flex flex-col justify-between">
+            <div onclick="openDetailModal('${r.id}')" class="cursor-pointer">
+              <div class="flex items-center gap-2 text-xs text-gray-500 mb-1.5">
+                <span>⏱️ ${r.time}분</span>
+                <span>·</span>
+                <span>📊 ${r.difficulty}</span>
+                <span>·</span>
+                <span>🔥 ${r.calories}kcal</span>
+              </div>
+              <h3 class="font-extrabold text-lg text-gray-900 mb-1.5 group-hover:text-orange-600 transition line-clamp-1">${r.title}</h3>
+              <p class="text-xs sm:text-sm text-gray-500 line-clamp-2 mb-4">${r.desc}</p>
+            </div>
+            <div class="pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+              <span>by <strong class="text-gray-700">${r.author}</strong></span>
+              <div class="flex items-center gap-2">
+                <span class="font-semibold text-orange-600">♥ ${r.likes}</span>
+                ${allowDelete ? `<button onclick="deleteMyRecipe('${r.id}')" class="px-2 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-semibold">삭제</button>` : ''}
+              </div>
+            </div>
+          </div>
+        </article>
+      `;
+    }
+
+    // ==================== 상세 모달 & 찜하기 ====================
+    function openDetailModal(id) {
+      const r = recipes.find(item => item.id === id);
+      if (!r) return;
+      const isLiked = likedIds.includes(r.id);
+
+      document.getElementById('detail-content').innerHTML = `
+        <img src="${r.image}" alt="${r.title}" class="w-full h-64 sm:h-72 object-cover" />
+        <div class="p-6 sm:p-8">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <span class="px-3 py-1 rounded-full bg-orange-100 text-orange-700 text-xs font-bold">${r.category}</span>
+            <button onclick="toggleLike('${r.id}', true)" class="px-4 py-1.5 rounded-full border border-orange-200 hover:bg-orange-50 text-sm font-bold flex items-center gap-1.5">
+              <span>${isLiked ? '❤️ 찜 완료' : '🤍 찜하기'}</span>
+              <span class="text-orange-600">(${r.likes})</span>
+            </button>
+          </div>
+          <h2 class="text-2xl font-extrabold text-gray-900 mb-2">${r.title}</h2>
+          <p class="text-sm text-gray-600 mb-5">${r.desc}</p>
+
+          <div class="grid grid-cols-3 gap-3 bg-orange-50/70 p-4 rounded-2xl text-center mb-6">
+            <div>
+              <p class="text-xs text-gray-500">조리시간</p>
+              <p class="font-extrabold text-gray-900">${r.time}분</p>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500">난이도</p>
+              <p class="font-extrabold text-gray-900">${r.difficulty}</p>
+            </div>
+            <div>
+              <p class="text-xs text-gray-500">예상 칼로리</p>
+              <p class="font-extrabold text-gray-900">${r.calories}kcal</p>
+            </div>
+          </div>
+
+          <div class="mb-6">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-extrabold text-base text-gray-900">🥕 준비 재료</h3>
+              <button onclick="closeDetailModal(); applyChatPrompt('${r.title} 만들려는데 없는 재료가 있을 때 대체 재료 추천해줘!')" class="text-xs font-semibold text-orange-600 hover:underline">
+                대체 재료 AI에게 묻기 →
+              </button>
+            </div>
+            <ul class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              ${r.ingredients.map(ing => `
+                <li class="flex items-center gap-2 bg-gray-50 px-3.5 py-2 rounded-xl text-sm">
+                  <input type="checkbox" class="accent-orange-500 w-4 h-4 rounded" />
+                  <span>${ing}</span>
+                </li>
+              `).join('')}
+            </ul>
+          </div>
+
+          <div>
+            <h3 class="font-extrabold text-base text-gray-900 mb-3">👩‍🍳 조리 순서</h3>
+            <ol class="space-y-3">
+              ${r.steps.map((step, idx) => `
+                <li class="flex gap-3 items-start bg-white border border-gray-100 p-3.5 rounded-2xl shadow-sm">
+                  <span class="w-6 h-6 rounded-full bg-orange-500 text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">${idx + 1}</span>
+                  <p class="text-sm text-gray-700 leading-relaxed">${step}</p>
+                </li>
+              `).join('')}
+            </ol>
+          </div>
+        </div>
+      `;
+      document.getElementById('detail-modal').classList.remove('hidden');
+    }
+
+    function closeDetailModal() {
+      document.getElementById('detail-modal').classList.add('hidden');
+    }
+
+    function toggleLike(id, refreshModal = false) {
+      if (!currentUser) {
+        showToast('로그인 후 레시피를 찜할 수 있습니다!');
+        openAuthModal('login');
+        return;
+      }
+      const recipe = recipes.find(r => r.id === id);
+      if (!recipe) return;
+
+      const idx = likedIds.indexOf(id);
+      if (idx > -1) {
+        likedIds.splice(idx, 1);
+        recipe.likes = Math.max(0, recipe.likes - 1);
+        showToast('찜 목록에서 해제했습니다.');
+      } else {
+        likedIds.push(id);
+        recipe.likes += 1;
+        showToast('❤️ 마이페이지 찜한 레시피에 저장되었습니다!');
+      }
+      localStorage.setItem('ai_chef_likes', JSON.stringify(likedIds));
+      localStorage.setItem(STORAGE_KEY_RECIPES, JSON.stringify(recipes));
+
+      renderRecipes();
+      if (!document.getElementById('view-mypage').classList.contains('hidden')) renderMyPage();
+      if (refreshModal) openDetailModal(id);
+    }
+
+    // ==================== 레시피 공유(등록) ====================
+    function handleShareClick() {
+      if (!currentUser) {
+        showToast('레시피를 공유하려면 먼저 로그인해주세요!');
+        openAuthModal('login');
+        return;
+      }
+      document.getElementById('share-modal').classList.remove('hidden');
+    }
+
+    function closeShareModal() {
+      document.getElementById('share-modal').classList.add('hidden');
+    }
+
+    function initShareFormRows() {
+      const ingList = document.getElementById('ingredients-list');
+      const stepList = document.getElementById('steps-list');
+      ingList.innerHTML = '';
+      stepList.innerHTML = '';
+      addIngredientRow('예: 양파 1/2개');
+      addIngredientRow('예: 간장 2큰술');
+      addStepRow('예: 재료를 먹기 좋은 크기로 손질합니다.');
+      addStepRow('예: 팬에 기름을 두르고 중불에서 볶아 완성합니다.');
+    }
+
+    function addIngredientRow(placeholder = '재료명과 계량 입력') {
+      const div = document.createElement('div');
+      div.className = 'flex gap-2';
+      div.innerHTML = `
+        <input type="text" required placeholder="${placeholder}" class="ing-input flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm" />
+        <button type="button" onclick="this.parentElement.remove()" class="px-2.5 rounded-xl bg-gray-100 hover:bg-red-50 text-gray-500 hover:text-red-500 text-xs font-bold">✕</button>
+      `;
+      document.getElementById('ingredients-list').appendChild(div);
+    }
+
+    function addStepRow(placeholder = '조리 단계를 자세히 적어주세요') {
+      const div = document.createElement('div');
+      div.className = 'flex gap-2';
+      div.innerHTML = `
+        <input type="text" required placeholder="${placeholder}" class="step-input flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm" />
+        <button type="button" onclick="this.parentElement.remove()" class="px-2.5 rounded-xl bg-gray-100 hover:bg-red-50 text-gray-500 hover:text-red-500 text-xs font-bold">✕</button>
+      `;
+      document.getElementById('steps-list').appendChild(div);
+    }
+
+    function handleRecipeImageUpload(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        uploadedRecipeImageBase64 = ev.target.result;
+        const preview = document.getElementById('preview-recipe-img');
+        preview.src = uploadedRecipeImageBase64;
+        preview.classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function submitRecipe(e) {
+      e.preventDefault();
+      if (!currentUser) return;
+
+      const ingredients = Array.from(document.querySelectorAll('.ing-input')).map(i => i.value.trim()).filter(Boolean);
+      const steps = Array.from(document.querySelectorAll('.step-input')).map(s => s.value.trim()).filter(Boolean);
+      const urlInput = document.getElementById('inp-image-url').value.trim();
+
+      const newRecipe = {
+        id: 'rec-' + Date.now(),
+        title: document.getElementById('inp-title').value.trim(),
+        category: document.getElementById('inp-category').value,
+        time: Number(document.getElementById('inp-time').value) || 15,
+        difficulty: document.getElementById('inp-difficulty').value,
+        calories: Number(document.getElementById('inp-calories').value) || 400,
+        likes: 1,
+        author: currentUser.nickname,
+        authorEmail: currentUser.email,
+        desc: document.getElementById('inp-desc').value.trim(),
+        image: uploadedRecipeImageBase64 || urlInput || 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80',
+        tags: [document.getElementById('inp-category').value, '홈메이드'],
+        ingredients,
+        steps
+      };
+
+      recipes.unshift(newRecipe);
+      localStorage.setItem(STORAGE_KEY_RECIPES, JSON.stringify(recipes));
+
+      document.getElementById('share-form').reset();
+      uploadedRecipeImageBase64 = '';
+      document.getElementById('preview-recipe-img').classList.add('hidden');
+      initShareFormRows();
+      closeShareModal();
+      switchView('home');
+      renderRecipes();
+      showToast('🎉 새 레시피가 성공적으로 공유되었습니다!');
+    }
+
+    // ==================== 회원가입 / 로그인 & 마이페이지 ====================
+    function openAuthModal(mode = 'login') {
+      switchAuthTab(mode);
+      document.getElementById('auth-modal').classList.remove('hidden');
+    }
+
+    function closeAuthModal() {
+      document.getElementById('auth-modal').classList.add('hidden');
+    }
+
+    function switchAuthTab(mode) {
+      authMode = mode;
+      const isSignup = mode === 'signup';
+      document.getElementById('auth-modal-title').textContent = isSignup ? '회원가입' : '로그인';
+      document.getElementById('auth-submit-btn').textContent = isSignup ? '회원가입 완료' : '로그인하기';
+      document.getElementById('auth-nickname-field').classList.toggle('hidden', !isSignup);
+      document.getElementById('auth-nickname').required = isSignup;
+
+      document.getElementById('auth-tab-login').className = !isSignup
+        ? 'py-2 rounded-lg text-sm font-bold bg-white text-orange-600 shadow-sm'
+        : 'py-2 rounded-lg text-sm font-bold text-gray-500';
+      document.getElementById('auth-tab-signup').className = isSignup
+        ? 'py-2 rounded-lg text-sm font-bold bg-white text-orange-600 shadow-sm'
+        : 'py-2 rounded-lg text-sm font-bold text-gray-500';
+    }
+
+    function handleAuthSubmit(e) {
+      e.preventDefault();
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value;
+      const nicknameInput = document.getElementById('auth-nickname').value.trim();
+
+      const users = JSON.parse(localStorage.getItem('ai_chef_users_db')) || [];
+
+      if (authMode === 'signup') {
+        if (users.some(u => u.email === email)) {
+          showToast('이미 가입된 이메일입니다. 로그인해주세요.');
+          switchAuthTab('login');
+          return;
+        }
+        const newUser = { email, password, nickname: nicknameInput || email.split('@')[0] };
+        users.push(newUser);
+        localStorage.setItem('ai_chef_users_db', JSON.stringify(users));
+        currentUser = { email: newUser.email, nickname: newUser.nickname };
+        showToast(`환영합니다, ${currentUser.nickname} 셰프님!`);
+      } else {
+        const found = users.find(u => u.email === email && u.password === password);
+        if (found) {
+          currentUser = { email: found.email, nickname: found.nickname };
+        } else {
+          currentUser = { email, nickname: email.split('@')[0] };
+        }
+        showToast(`${currentUser.nickname}님, 로그인되었습니다!`);
+      }
+
+      localStorage.setItem('ai_chef_user', JSON.stringify(currentUser));
+      updateAuthUI();
+      closeAuthModal();
+    }
+
+    function quickDemoLogin() {
+      currentUser = { email: 'demo@chef.kr', nickname: '자취요리연구소' };
+      localStorage.setItem('ai_chef_user', JSON.stringify(currentUser));
+      updateAuthUI();
+      closeAuthModal();
+      showToast('⚡ 체험용 셰프 계정으로 로그인되었습니다!');
+    }
+
+    function logoutUser() {
+      currentUser = null;
+      localStorage.removeItem('ai_chef_user');
+      updateAuthUI();
+      switchView('home');
+      showToast('로그아웃되었습니다.');
+    }
+
+    function updateAuthUI() {
+      const btnOpen = document.getElementById('btn-auth-open');
+      const userGroup = document.getElementById('user-nav-group');
+      if (currentUser) {
+        btnOpen.classList.add('hidden');
+        userGroup.classList.remove('hidden');
+        userGroup.classList.add('flex');
+        document.getElementById('nav-user-name').textContent = `${currentUser.nickname}님`;
+      } else {
+        btnOpen.classList.remove('hidden');
+        userGroup.classList.add('hidden');
+        userGroup.classList.remove('flex');
+      }
+    }
+
+    function switchView(view) {
+      document.getElementById('view-home').classList.toggle('hidden', view !== 'home');
+      document.getElementById('view-mypage').classList.toggle('hidden', view !== 'mypage');
+      if (view === 'mypage') {
+        if (!currentUser) {
+          openAuthModal('login');
+          switchView('home');
+          return;
+        }
+        renderMyPage();
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function switchMyPageTab(tab) {
+      currentMyPageTab = tab;
+      document.getElementById('tab-liked').className = tab === 'liked'
+        ? 'pb-3 px-2 font-bold text-sm sm:text-base border-b-2 border-orange-500 text-orange-600 transition'
+        : 'pb-3 px-2 font-bold text-sm sm:text-base border-b-2 border-transparent text-gray-500 hover:text-gray-800 transition';
+      document.getElementById('tab-mine').className = tab === 'mine'
+        ? 'pb-3 px-2 font-bold text-sm sm:text-base border-b-2 border-orange-500 text-orange-600 transition'
+        : 'pb-3 px-2 font-bold text-sm sm:text-base border-b-2 border-transparent text-gray-500 hover:text-gray-800 transition';
+      renderMyPage();
+    }
+
+    function renderMyPage() {
+      if (!currentUser) return;
+      document.getElementById('mypage-nickname').textContent = currentUser.nickname;
+      document.getElementById('mypage-email').textContent = currentUser.email;
+
+      const likedRecipes = recipes.filter(r => likedIds.includes(r.id));
+      const myRecipes = recipes.filter(r => r.authorEmail === currentUser.email);
+
+      document.getElementById('stat-liked-count').textContent = likedRecipes.length;
+      document.getElementById('stat-mine-count').textContent = myRecipes.length;
+
+      const targetList = currentMyPageTab === 'liked' ? likedRecipes : myRecipes;
+      const grid = document.getElementById('mypage-grid');
+      const empty = document.getElementById('mypage-empty');
+
+      if (targetList.length === 0) {
+        grid.innerHTML = '';
+        empty.classList.remove('hidden');
+        document.getElementById('mypage-empty-text').textContent =
+          currentMyPageTab === 'liked'
+            ? '아직 찜한 레시피가 없습니다. 마음에 드는 레시피에 하트를 눌러보세요!'
+            : '아직 직접 올린 레시피가 없습니다. 첫 레시피를 공유해보세요!';
+      } else {
+        empty.classList.add('hidden');
+        grid.innerHTML = targetList.map(r => createRecipeCardHTML(r, currentMyPageTab === 'mine')).join('');
+      }
+    }
+
+    function deleteMyRecipe(id) {
+      if (!confirm('정말 이 레시피를 삭제하시겠습니까?')) return;
+      recipes = recipes.filter(r => r.id !== id);
+      localStorage.setItem(STORAGE_KEY_RECIPES, JSON.stringify(recipes));
+      renderMyPage();
+      renderRecipes();
+      showToast('레시피가 삭제되었습니다.');
+    }
+
+    // ==================== API 키 설정 ====================
+    function openApiSettingsModal() {
+      document.getElementById('gemini-key-input').value = localStorage.getItem('ai_chef_gemini_key') || '';
+      document.getElementById('api-modal').classList.remove('hidden');
+    }
+    function closeApiSettingsModal() {
+      document.getElementById('api-modal').classList.add('hidden');
+    }
+    function saveApiKey() {
+      const val = document.getElementById('gemini-key-input').value.trim();
+      if (val) localStorage.setItem('ai_chef_gemini_key', val);
+      else localStorage.removeItem('ai_chef_gemini_key');
+      closeApiSettingsModal();
+      showToast('API 키 설정이 저장되었습니다.');
+    }
+
+    // ==================== AI 셰프 챗봇 (요리 심폐소생 · 대체재료 · 사진 식단) ====================
+    function toggleChatbot() {
+      document.getElementById('chatbot-window').classList.toggle('hidden');
+    }
+
+    function openChatbotWithPreset(type) {
+      document.getElementById('chatbot-window').classList.remove('hidden');
+      if (type === 'mealplan') {
+        triggerChatPhoto();
+      }
+    }
+
+    function applyChatPrompt(text) {
+      document.getElementById('chatbot-window').classList.remove('hidden');
+      const input = document.getElementById('chat-input');
+      input.value = text;
+      input.focus();
+    }
+
+    function triggerChatPhoto() {
+      document.getElementById('chat-file-input').click();
+    }
+
+    function handleChatImageSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        chatAttachedImageBase64 = ev.target.result;
+        document.getElementById('chat-preview-thumb').src = chatAttachedImageBase64;
+        document.getElementById('chat-image-preview-bar').classList.remove('hidden');
+        if (!document.getElementById('chat-input').value.trim()) {
+          document.getElementById('chat-input').value = '이 사진 속 재료/식단을 분석해서 맞춤 레시피와 추천 식단표를 짜줘!';
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearChatImage() {
+      chatAttachedImageBase64 = '';
+      document.getElementById('chat-file-input').value = '';
+      document.getElementById('chat-image-preview-bar').classList.add('hidden');
+    }
+
+    function appendChatBubble(sender, htmlText, imgSrc = '') {
+      const box = document.getElementById('chat-messages');
+      const wrapper = document.createElement('div');
+      wrapper.className = sender === 'user' ? 'flex justify-end' : 'flex items-start gap-2.5';
+
+      if (sender === 'user') {
+        wrapper.innerHTML = `
+          <div class="max-w-[80%] bg-orange-500 text-white rounded-2xl rounded-tr-none p-3 shadow-sm text-xs sm:text-sm">
+            ${imgSrc ? `<img src="${imgSrc}" class="w-full max-h-36 object-cover rounded-xl mb-2" />` : ''}
+            <p class="leading-relaxed">${htmlText}</p>
+          </div>
+        `;
+      } else {
+        wrapper.innerHTML = `
+          <div class="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center shrink-0">👨‍🍳</div>
+          <div class="max-w-[82%] bg-white border border-gray-100 rounded-2xl rounded-tl-none p-3 shadow-sm text-gray-800 leading-relaxed text-xs sm:text-sm">
+            ${htmlText}
+          </div>
+        `;
+      }
+      box.appendChild(wrapper);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    async function sendChatMessage(e) {
+      e.preventDefault();
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text && !chatAttachedImageBase64) return;
+
+      const userImg = chatAttachedImageBase64;
+      appendChatBubble('user', text || '사진을 분석해주세요!', userImg);
+      input.value = '';
+      clearChatImage();
+
+      const apiKey = localStorage.getItem('ai_chef_gemini_key');
+      if (apiKey) {
+        await callGeminiAPI(apiKey, text, userImg);
+      } else {
+        setTimeout(() => {
+          const reply = generateSmartChefFallback(text, Boolean(userImg));
+          appendChatBubble('bot', reply);
+        }, 500);
+      }
+    }
+
+    async function callGeminiAPI(apiKey, promptText, base64Img) {
+      try {
+        const parts = [{
+          text: `당신은 친절하고 유능한 'AI 셰프'입니다. 요리 실패 심폐소생술, 대체 재료 추천, 사진 기반 냉장고 파먹기 및 맞춤형 식단표 작성을 한국어로 명확하고 실용적으로 답변해주세요.\n사용자 질문: ${promptText}`
+        }];
+
+        if (base64Img) {
+          const [meta, data] = base64Img.split(',');
+          const mimeType = meta.match(/:(.*?);/)[1];
+          parts.push({ inlineData: { mimeType, data } });
+        }
+
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts }] })
+        });
+        const json = await res.json();
+        const answer = json?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (answer) {
+          appendChatBubble('bot', answer.replace(/\n/g, '<br/>'));
+        } else {
+          throw new Error('응답 형식 오류');
+        }
+      } catch (err) {
+        appendChatBubble('bot', generateSmartChefFallback(promptText, Boolean(base64Img)) +
+          '<br/><span class="text-[11px] text-gray-400">(※ API 키 확인 전 기본 AI 셰프 가이드로 안내되었습니다)</span>');
+      }
+    }
+
+    function generateSmartChefFallback(q, hasImage) {
+      if (hasImage) {
+        return `
+          <strong>📸 사진 기반 AI 맞춤 식단 & 레시피 제안</strong><br/><br/>
+          업로드해주신 사진을 분석해 균형 잡힌 하루 추천 식단을 구성했습니다!<br/>
+          • <strong>아침:</strong> 반숙 계란 & 통밀 토스트 + 방울토마토 (약 350kcal)<br/>
+          • <strong>점심:</strong> 닭가슴살 아보카도 샐러드 볼 (약 420kcal)<br/>
+          • <strong>저녁:</strong> 두부 버섯 된장찌개와 잡곡밥 반 공기 (약 450kcal)<br/><br/>
+          💡 <em>우측 상단 ⚙️ API 설정에 Gemini API 키를 입력하시면 실제 사진 속 식재료를 정밀 인식해 답변해 드립니다!</em>
+        `;
+      }
+      if (q.includes('짜') || q.includes('망') || q.includes('탄') || q.includes('매워') || q.includes('싱거')) {
+        return `
+          <strong>🚨 AI 셰프 긴급 심폐소생술!</strong><br/><br/>
+          1. <strong>음식이 너무 짤 때:</strong> 감자 조각이나 두부, 양파를 큼직하게 썰어 5분간 함께 끓이면 염분을 흡수합니다. 국물 요리라면 맹물 대신 쌀뜨물이나 무를 추가해보세요.<br/>
+          2. <strong>너무 매울 때:</strong> 우유, 치즈, 설탕 0.5큰술, 또는 감자·계란을 추가하면 캡사이신이 중화됩니다.<br/>
+          3. <strong>바닥이 살짝 탔을 때:</strong> 절대 바닥을 긁지 말고 윗부분만 새 냄비로 옮긴 뒤, 양파 반 개를 넣어 3분 끓이면 탄 향이 잡힙니다!
+        `;
+      }
+      if (q.includes('대체') || q.includes('없는데') || q.includes('대신')) {
+        return `
+          <strong>🔄 만능 대체 재료 가이드</strong><br/><br/>
+          • <strong>생크림 대신:</strong> 우유 200ml + 버터 1큰술 (또는 두유 + 슬라이스 치즈 1장)<br/>
+          • <strong>맛술/미림 대신:</strong> 소주 1큰술 + 설탕 0.5큰술<br/>
+          • <strong>굴소스 대신:</strong> 진간장 1큰술 + 설탕 0.5큰술 + 다진마늘 약간<br/>
+          • <strong>버터 대신:</strong> 올리브오일이나 식용유 (베이킹이 아닌 볶음 요리 시 1:1 대체 가능)<br/><br/>
+          특정 재료 이름을 말씀해주시면 정확한 대체 비율을 알려드릴게요!
+        `;
+      }
+      return `
+        <strong>👨‍🍳 AI 셰프의 맞춤 솔루션</strong><br/><br/>
+        질문하신 <em>"${q}"</em>에 대해 다음과 같이 추천드립니다:<br/>
+        • 현재 보유한 주재료에 <strong>양파, 대파, 다진마늘</strong>만 더해도 감칠맛이 2배 살아납니다.<br/>
+        • 조리 실패를 줄이려면 양념은 정량의 <strong>70%만 먼저 넣고</strong> 마지막에 간을 맞추는 것이 핵심입니다.<br/><br/>
+        더 구체적인 상황(예: "김치볶음밥이 너무 질어졌어", "우유 없이 크림파스타 만들기")을 알려주시면 바로 해결해 드릴게요!
+      `;
+    }
+  </script>
+</body>
+</html>
